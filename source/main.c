@@ -8,6 +8,7 @@ const int WINDOW_WIDTH = 800;
 const int WINDOW_HEIGHT = 600;
 const int WINDOW_WIDTH_VIRTUAL = 160;
 const int WINDOW_HEIGHT_VIRTUAL = 144;
+const int WINDOW_PIXELS_TOTAL_VIRTUAL = WINDOW_WIDTH_VIRTUAL * WINDOW_HEIGHT_VIRTUAL;
 
 /*
     TODO-GS: Improve the following things
@@ -20,6 +21,7 @@ const int WINDOW_HEIGHT_VIRTUAL = 144;
       - SDL texture should be cleared after creating it unless every pixel is overwritten every frame
       - lock only when locking is necessary
       - what the pitch in textures is and how to use it
+      - apologize for the verbose nature, this is for clarity and showing of the sequence + compiler may not like varaibels not listed at top
       > things to show in post:
           - examples of pipes and letterbox
           - other things above
@@ -33,7 +35,8 @@ const int WINDOW_HEIGHT_VIRTUAL = 144;
 void cleanup(
   SDL_Window * const p_window,
   SDL_Renderer * const p_renderer,
-  SDL_Texture * const p_texture
+  SDL_Texture * const p_texture,
+  SDL_PixelFormat * const p_pixel_format
 );
 
 /* Entry point */
@@ -43,7 +46,7 @@ int main(int argc, char * argv[])
   if (SDL_Init(SDL_INIT_VIDEO) != 0)
   {
     fprintf(stderr, "\nRequired SDL2 subsystems could not be initialized - Error: %s", SDL_GetError());
-    cleanup(NULL, NULL, NULL);
+    cleanup(NULL, NULL, NULL, NULL);
     return OS_FAILURE_RETURN_CODE;
   }
 
@@ -60,7 +63,7 @@ int main(int argc, char * argv[])
   if (p_window == NULL)
   {
     fprintf(stderr, "\nSDL2 window could not be created - Error: %s", SDL_GetError());
-    cleanup(NULL, NULL, NULL);
+    cleanup(NULL, NULL, NULL, NULL);
     return OS_FAILURE_RETURN_CODE;
   }
 
@@ -69,7 +72,7 @@ int main(int argc, char * argv[])
   if (p_renderer == NULL)
   {
     fprintf(stderr, "\nSDL2 renderer could not be created - Error: %s", SDL_GetError());
-    cleanup(p_window, NULL, NULL);
+    cleanup(p_window, NULL, NULL, NULL);
     return OS_FAILURE_RETURN_CODE;
   }
 
@@ -84,7 +87,7 @@ int main(int argc, char * argv[])
   if (p_window_texture == NULL)
   {
     fprintf(stderr, "\nSDL2 texture could not be created - Error: %s", SDL_GetError());
-    cleanup(p_window, p_renderer, NULL);
+    cleanup(p_window, p_renderer, NULL, NULL);
     return OS_FAILURE_RETURN_CODE;
   }
 
@@ -95,13 +98,15 @@ int main(int argc, char * argv[])
   if (query_texture_successful != 0)
   {
     fprintf(stderr, "\nSDL2 texture attributes could not be queried - Error: %s", SDL_GetError());
+    cleanup(p_window, p_renderer, p_window_texture, NULL);
     return OS_FAILURE_RETURN_CODE;
   }
 
-  const SDL_PixelFormat * const p_texture_pixel_format = SDL_AllocFormat(window_texture_format);
+  SDL_PixelFormat * const p_texture_pixel_format = SDL_AllocFormat(window_texture_format);
   if (p_texture_pixel_format == NULL)
   {
     fprintf(stderr, "\nSDL2 texture pixel format could not be determined - Error: %s", SDL_GetError());
+    cleanup(p_window, p_renderer, p_window_texture, NULL);
     return OS_FAILURE_RETURN_CODE;
   }
 
@@ -110,7 +115,7 @@ int main(int argc, char * argv[])
   if (logical_size_set != 0)
   {
     fprintf(stderr, "\nSDL2 logical render size could not be set - Error: %s", SDL_GetError());
-    cleanup(p_window, p_renderer, p_window_texture);
+    cleanup(p_window, p_renderer, p_window_texture, p_texture_pixel_format);
     return OS_FAILURE_RETURN_CODE;
   }
 
@@ -119,6 +124,17 @@ int main(int argc, char * argv[])
   if (set_render_draw_color_successful != 0)
   {
     fprintf(stderr, "\nSDL2 renderer draw color could not be set - Error: %s", SDL_GetError());
+    cleanup(p_window, p_renderer, p_window_texture, p_texture_pixel_format);
+    return OS_FAILURE_RETURN_CODE;
+  }
+
+  /* SDL2 related setup and configuration completed successfully - Now allocate a client-side buffer for rendering operations */
+  uint32_t * p_client_pixels = malloc(sizeof(uint32_t) * WINDOW_PIXELS_TOTAL_VIRTUAL);
+  if (p_client_pixels == NULL)
+  {
+    fprintf(stderr, "\nSDL2 renderer draw color could not be set - Error: %s", SDL_GetError());
+    cleanup(p_window, p_renderer, p_window_texture, p_texture_pixel_format);
+    return OS_FAILURE_RETURN_CODE;
   }
 
   /* SDL2 renderer logical size set successfully - Now start the window loop */
@@ -156,13 +172,14 @@ int main(int argc, char * argv[])
 
     /* Write into the locked texture - Add a client side buffer for layered rendering and fast pixel access rendering */
     uint32_t * p_texture_pixels_rgba = (uint32_t *)p_texture_pixels;
-    for (int texel_y = 0; texel_y < WINDOW_WIDTH_VIRTUAL; texel_y++)
+    for (int texel_y = 0; texel_y < WINDOW_HEIGHT_VIRTUAL; texel_y++)
     {
-      for (int texel_x = 0; texel_x < WINDOW_HEIGHT_VIRTUAL; texel_x++)
+      for (int texel_x = 0; texel_x < WINDOW_WIDTH_VIRTUAL; texel_x++)
       {
         /* Do not assume platform uint to be 32 bits, use stdint or look for some other platform specific thing, though uint should be fine on modern systems */
         /* TODO-GS: Extract everything that can be pre-computed */
         /* TODO-GS: Extract from the client side rgba colors of same order */
+        /* TODO-GS: Use a function for copying this data, works with dynamic texture access? */
         const int pixel_index = (texture_pitch / sizeof(uint32_t)) * texel_y + texel_x;
         p_texture_pixels_rgba[pixel_index] = SDL_MapRGB(p_texture_pixel_format, 0, 0, 0xFF);
       }
@@ -199,7 +216,7 @@ int main(int argc, char * argv[])
   }
 
   /* Cleanup all resources */
-  cleanup(p_window, p_renderer, p_window_texture);
+  cleanup(p_window, p_renderer, p_window_texture, p_texture_pixel_format);
 
   /* Return to operating system successfully */
   return 0;
@@ -209,9 +226,13 @@ int main(int argc, char * argv[])
 void cleanup(
   SDL_Window * const p_window,
   SDL_Renderer * const p_renderer,
-  SDL_Texture * const p_texture
+  SDL_Texture * const p_texture,
+  SDL_PixelFormat * const p_pixel_format
 )
 {
+  /* Cleanup queried pixel formats */
+  SDL_FreeFormat(p_pixel_format);
+
   /* Cleanup SDL2 texture */
   if (p_texture != NULL)
     SDL_DestroyTexture(p_texture);
