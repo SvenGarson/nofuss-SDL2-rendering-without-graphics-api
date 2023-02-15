@@ -27,6 +27,7 @@ SDL_Window * p_window = NULL;
 SDL_Renderer * p_renderer = NULL;
 SDL_Texture * p_window_texture = NULL;
 SDL_PixelFormat * p_texture_pixel_format = NULL;
+client_pixel_rgba_ts * p_client_pixels_rgba = NULL;
 
 /* Entry point */
 int main(int argc, char * argv[])
@@ -112,7 +113,7 @@ int main(int argc, char * argv[])
   }
 
   /* SDL2 related setup and configuration completed successfully - Now allocate a client-side pixel buffer for offline rendering */
-  client_pixel_rgba_ts * const p_client_pixels_rgba = malloc(sizeof(client_pixel_rgba_ts) * WINDOW_PIXELS_TOTAL_VIRTUAL);
+  p_client_pixels_rgba = malloc(sizeof(client_pixel_rgba_ts) * WINDOW_PIXELS_TOTAL_VIRTUAL);
   if (p_client_pixels_rgba == NULL)
   {
     fprintf(stderr, "\nCould not allocate client-side pixel buffer for offline rendering - Error: Malloc failed");
@@ -242,6 +243,10 @@ int main(int argc, char * argv[])
 /* Function definitions */
 void cleanup(int report_status)
 {
+  /* Cleanup client-side pixel color buffer */
+  if (p_client_pixels_rgba != NULL)
+    free(p_client_pixels_rgba);
+
   /* Cleanup queried pixel formats */
   if (p_texture_pixel_format != NULL)
     SDL_FreeFormat(p_texture_pixel_format);
