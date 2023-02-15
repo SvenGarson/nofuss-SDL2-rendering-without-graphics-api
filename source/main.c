@@ -21,7 +21,9 @@ const int WINDOW_PIXELS_TOTAL_VIRTUAL = WINDOW_WIDTH_VIRTUAL * WINDOW_HEIGHT_VIR
       - SDL texture should be cleared after creating it unless every pixel is overwritten every frame
       - lock only when locking is necessary
       - what the pitch in textures is and how to use it
-      - apologize for the verbose nature, this is for clarity and showing of the sequence + compiler may not like varaibels not listed at top
+      - apologize for the verbose nature (no funtions or abstractions), this is for clarity and showing of the sequence + compiler may not like varaibels not listed at top
+      - can use unsigned int for most, but that may break on other platforms, stdint is more explicit
+      - I believe in handling error
       > things to show in post:
           - examples of pipes and letterbox
           - other things above
@@ -30,6 +32,14 @@ const int WINDOW_PIXELS_TOTAL_VIRTUAL = WINDOW_WIDTH_VIRTUAL * WINDOW_HEIGHT_VIR
           - texture locking
           - set the window to be resizeable, handle the resizing to demonstrate the piping and letterboxed rendering
 */
+
+/* Datatypes */
+typedef struct {
+  uint8_t red;
+  uint8_t green;
+  uint8_t blue;
+  uint8_t alpha;
+} client_pixel_rgba_ts;
 
 /* Function prototypes */
 void cleanup(
@@ -128,16 +138,16 @@ int main(int argc, char * argv[])
     return OS_FAILURE_RETURN_CODE;
   }
 
-  /* SDL2 related setup and configuration completed successfully - Now allocate a client-side buffer for rendering operations */
-  uint32_t * p_client_pixels = malloc(sizeof(uint32_t) * WINDOW_PIXELS_TOTAL_VIRTUAL);
-  if (p_client_pixels == NULL)
+  /* SDL2 related setup and configuration completed successfully - Now allocate a client-side pixel buffer for rendering operations */
+  client_pixel_rgba_ts * const p_client_pixels_rgba = malloc(sizeof(client_pixel_rgba_ts) * WINDOW_PIXELS_TOTAL_VIRTUAL);
+  if (p_client_pixels_rgba == NULL)
   {
-    fprintf(stderr, "\nSDL2 renderer draw color could not be set - Error: %s", SDL_GetError());
+    fprintf(stderr, "\nCould not allocate client-side pixel buffer for offline rendering - Error: %s", SDL_GetError());
     cleanup(p_window, p_renderer, p_window_texture, p_texture_pixel_format);
     return OS_FAILURE_RETURN_CODE;
   }
 
-  /* SDL2 renderer logical size set successfully - Now start the window loop */
+  /* All rendering preparations setup successfully - Now start the window loop */
   int window_close_requested = 0;
   while (!window_close_requested)
   {
@@ -160,8 +170,34 @@ int main(int argc, char * argv[])
       }
     }
 
-    /* Update texture color data before rendering it into the (hidden) renderer surface */
-    /* Lock the texture for WRITING ONLY */
+    /* Add SDL2 window events processed - Now render into the client-side pixel buffer */
+    for (int texel_y = 0; texel_y < WINDOW_HEIGHT_VIRTUAL; texel_y++)
+    {
+      for (int texel_x = 0; texel_x < WINDOW_WIDTH_VIRTUAL; texel_x++)
+      {
+        const int client_texel_index = (WINDOW_WIDTH_VIRTUAL * texel_y) + texel_x;
+        client_pixel_rgba_ts * const p_client_pixel_color = p_client_pixels_rgba + client_texel_index;
+        
+        /* TODO-GS: Test pixel positioning */
+        if (client_texel_index == 0) p_client_pixel_color->red = 0xFF;
+        else if (client_texel_index == WINDOW_WIDTH_VIRTUAL - 1) p_client_pixel_color->green = 0xFF;
+        else if (client_texel_index == (WINDOW_HEIGHT_VIRTUAL - 1) * WINDOW_WIDTH_VIRTUAL) p_client_pixel_color->blue = 0xFF;
+        else if (client_texel_index == WINDOW_PIXELS_TOTAL_VIRTUAL - 1)
+        {
+          p_client_pixel_color->red = p_client_pixel_color->green = p_client_pixel_color->blue = 0x00;
+        }
+        else 
+        {
+          p_client_pixel_color->red = p_client_pixel_color->green = p_client_pixel_color->blue = p_client_pixel_color->alpha = 0xFF;
+        }
+      }
+    }
+
+    /*
+        Update texture color data before rendering it into the (hidden) renderer surface.
+
+        The pointer to the texture pixel must be used for WRITING ONLY!
+    */
     void * p_texture_pixels = NULL;
     int texture_pitch;
     const int lock_texture_successful = SDL_LockTexture(p_window_texture, NULL, (void **)&p_texture_pixels, &texture_pitch);
@@ -170,18 +206,29 @@ int main(int argc, char * argv[])
       fprintf(stderr, "\nSDL2 texture could not be locked - %s", SDL_GetError());
     }
 
-    /* Write into the locked texture - Add a client side buffer for layered rendering and fast pixel access rendering */
-    uint32_t * p_texture_pixels_rgba = (uint32_t *)p_texture_pixels;
+    /*
+        Texture locked - Now copy the client-side pixel data into the texture in one go
+    */
+    uint32_t * const p_texture_pixels_rgba = (uint32_t *)p_texture_pixels;
+    const int padded_texels_per_row = texture_pitch / sizeof(uint32_t);
     for (int texel_y = 0; texel_y < WINDOW_HEIGHT_VIRTUAL; texel_y++)
     {
       for (int texel_x = 0; texel_x < WINDOW_WIDTH_VIRTUAL; texel_x++)
       {
-        /* Do not assume platform uint to be 32 bits, use stdint or look for some other platform specific thing, though uint should be fine on modern systems */
-        /* TODO-GS: Extract everything that can be pre-computed */
-        /* TODO-GS: Extract from the client side rgba colors of same order */
-        /* TODO-GS: Use a function for copying this data, works with dynamic texture access? */
-        const int pixel_index = (texture_pitch / sizeof(uint32_t)) * texel_y + texel_x;
-        p_texture_pixels_rgba[pixel_index] = SDL_MapRGB(p_texture_pixel_format, 0, 0, 0xFF);
+        /* At this point assume that the client-side texture has the same dimensions as the SDL2 texture to excessive work per pixel */
+        const int texture_texel_index = (padded_texels_per_row * texel_y) + texel_x;
+        const int client_texel_index = (WINDOW_WIDTH_VIRTUAL * texel_y) + texel_x;
+
+        /* Convert the client pixel color based on the texture pixel format */
+        const client_pixel_rgba_ts * p_client_pixel_color = p_client_pixels_rgba + client_texel_index;
+        const uint32_t formatted_pixel_color = SDL_MapRGB(
+          p_texture_pixel_format,
+          p_client_pixel_color->red,
+          p_client_pixel_color->green,
+          p_client_pixel_color->blue
+        );
+
+        p_texture_pixels_rgba[texture_texel_index] = formatted_pixel_color;
       }
     }
 
