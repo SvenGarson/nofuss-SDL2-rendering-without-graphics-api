@@ -47,7 +47,7 @@ int main(int argc, char * argv[])
     WINDOW_HEIGHT,
     SDL_WINDOW_SHOWN
   );
-  
+
   if (p_window == NULL)
   {
     fprintf(stderr, "\nSDL2 window could not be created - Error: %s", SDL_GetError());
@@ -239,6 +239,7 @@ int main(int argc, char * argv[])
   return 0;
 }
 
+/* Function definitions */
 void cleanup(int report_status)
 {
   /* Cleanup queried pixel formats */
