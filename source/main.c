@@ -19,6 +19,7 @@ const int WINDOW_HEIGHT_VIRTUAL = 144;
       - Explain actual and virtual terminology
       - SDL texture should be cleared after creating it unless every pixel is overwritten every frame
       - lock only when locking is necessary
+      - what the pitch in textures is and how to use it
       > things to show in post:
           - examples of pipes and letterbox
           - other things above
@@ -87,7 +88,24 @@ int main(int argc, char * argv[])
     return OS_FAILURE_RETURN_CODE;
   }
 
-  /* SDL2 window texture created successfully */
+  /* SDL2 window texture created successfully - Now extract the created texture attributes for robust, per-pixel texture manipulation */
+  uint32_t window_texture_format;
+  int window_texture_width, window_texture_height;
+  const int query_texture_successful = SDL_QueryTexture(p_window_texture, &window_texture_format, NULL, &window_texture_width, &window_texture_height);
+  if (query_texture_successful != 0)
+  {
+    fprintf(stderr, "\nSDL2 texture attributes could not be queried - Error: %s", SDL_GetError());
+    return OS_FAILURE_RETURN_CODE;
+  }
+
+  const SDL_PixelFormat * const p_texture_pixel_format = SDL_AllocFormat(window_texture_format);
+  if (p_texture_pixel_format == NULL)
+  {
+    fprintf(stderr, "\nSDL2 texture pixel format could not be determined - Error: %s", SDL_GetError());
+    return OS_FAILURE_RETURN_CODE;
+  }
+
+  /* SDL2 texture attributes determined successfully - Now configure the renderer for fixed-ration rendering */
   const int logical_size_set = SDL_RenderSetLogicalSize(p_renderer, WINDOW_WIDTH_VIRTUAL, WINDOW_HEIGHT_VIRTUAL);
   if (logical_size_set != 0)
   {
@@ -129,30 +147,25 @@ int main(int argc, char * argv[])
     /* Update texture color data before rendering it into the (hidden) renderer surface */
     /* Lock the texture for WRITING ONLY */
     void * p_texture_pixels = NULL;
-    int texture_bytes_per_row;
-    const int lock_texture_successful = SDL_LockTexture(p_window_texture, NULL, &p_texture_pixels, &texture_bytes_per_row);
+    int texture_pitch;
+    const int lock_texture_successful = SDL_LockTexture(p_window_texture, NULL, (void **)&p_texture_pixels, &texture_pitch);
     if (lock_texture_successful != 0)
     {
       fprintf(stderr, "\nSDL2 texture could not be locked - %s", SDL_GetError());
     }
 
-    /* Write into the texture - TODO-GS: Use the texture pitch here i.e. is RGBA8888 padded in some way? */
-    /*
-        Use solution stated in 'https://gamedev.stackexchange.com/questions/98641/how-do-i-modify-textures-in-sdl-with-direct-pixel-access'
-        to do things safely even when texture are padded
-    */
-    unsigned int * const p_pixels = (unsigned int *)p_texture_pixels;
-    for (int i = 0; i < (WINDOW_WIDTH_VIRTUAL * WINDOW_HEIGHT_VIRTUAL); i++)
+    /* Write into the locked texture - Add a client side buffer for layered rendering and fast pixel access rendering */
+    uint32_t * p_texture_pixels_rgba = (uint32_t *)p_texture_pixels;
+    for (int texel_y = 0; texel_y < WINDOW_WIDTH_VIRTUAL; texel_y++)
     {
-      unsigned int random_color = (unsigned int) rand() % 256;
-      random_color <<= 8;
-      random_color |= (unsigned int) rand() % 256;
-      random_color <<= 8;
-      random_color |= (unsigned int) rand() % 256;
-      random_color <<= 8;
-      random_color |= 0xFF;
-
-      p_pixels[i] = random_color;
+      for (int texel_x = 0; texel_x < WINDOW_HEIGHT_VIRTUAL; texel_x++)
+      {
+        /* Do not assume platform uint to be 32 bits, use stdint or look for some other platform specific thing, though uint should be fine on modern systems */
+        /* TODO-GS: Extract everything that can be pre-computed */
+        /* TODO-GS: Extract from the client side rgba colors of same order */
+        const int pixel_index = (texture_pitch / sizeof(uint32_t)) * texel_y + texel_x;
+        p_texture_pixels_rgba[pixel_index] = SDL_MapRGB(p_texture_pixel_format, 0, 0, 0xFF);
+      }
     }
 
     /* Unlock the locked texture and upload the changes to video memory if necessary */
