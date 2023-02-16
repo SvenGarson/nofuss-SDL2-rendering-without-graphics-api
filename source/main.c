@@ -4,7 +4,7 @@
 
 /* Constants */
 const int OS_FAILURE_RETURN_CODE = -1;
-const char WINDOW_TITLE[] = "SDL2 rendering without graphics API";
+const char WINDOW_TITLE[] = "SDL2 rendering pixels without graphics API";
 const int WINDOW_WIDTH = 800;
 const int WINDOW_HEIGHT = 600;
 const int WINDOW_WIDTH_VIRTUAL = 160;
@@ -245,8 +245,7 @@ void cleanup(int report_status)
 {
   /* Cleanup client-side pixel color buffer */
   if (p_client_pixels_rgba != NULL)
-    free(p_client_pixels_rgba);
-
+  
   /* Cleanup queried pixel formats */
   if (p_texture_pixel_format != NULL)
     SDL_FreeFormat(p_texture_pixel_format);
