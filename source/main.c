@@ -245,6 +245,7 @@ void cleanup(int report_status)
 {
   /* Cleanup client-side pixel color buffer */
   if (p_client_pixels_rgba != NULL)
+    free(p_client_pixels_rgba);
   
   /* Cleanup queried pixel formats */
   if (p_texture_pixel_format != NULL)
