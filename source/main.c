@@ -11,7 +11,7 @@ const char WINDOW_TITLE[] = "SDL2 rendering pixels without graphics API";
 const int WINDOW_WIDTH = 800;
 const int WINDOW_HEIGHT = 600;
 const int WINDOW_WIDTH_VIRTUAL = 160;
-const int WINDOW_HEIGHT_VIRTUAL = 50;
+const int WINDOW_HEIGHT_VIRTUAL = 144;
 const int WINDOW_PIXELS_TOTAL_VIRTUAL = WINDOW_WIDTH_VIRTUAL * WINDOW_HEIGHT_VIRTUAL;
 
 /* Datatypes */
@@ -173,10 +173,13 @@ int main(int argc, char * argv[])
         const int client_texel_index = (WINDOW_WIDTH_VIRTUAL * texel_y) + texel_x;
         client_pixel_rgba_ts * const p_client_pixel_color = p_client_pixels_rgba + client_texel_index;
         
-        /* Render into the client-side pixel buffer - A random color per frame for now */
-        p_client_pixel_color->red   = (uint8_t)(rand() % 256);
-        p_client_pixel_color->green = (uint8_t)(rand() % 256);
-        p_client_pixel_color->blue  = (uint8_t)(rand() % 256);
+        /* Determine a random color intensity to render per pixel */
+        const uint8_t random_intensity = (uint8_t)(rand() % 80);
+
+        /* Render into the client-side pixel buffer */
+        p_client_pixel_color->red   = random_intensity;
+        p_client_pixel_color->green = random_intensity;
+        p_client_pixel_color->blue  = random_intensity;
         p_client_pixel_color->alpha = 0xFF;
       }
     }
@@ -188,7 +191,13 @@ int main(int argc, char * argv[])
     */
     void * p_texture_pixels = NULL;
     int texture_pitch;
-    const int lock_texture_successful = SDL_LockTexture(p_window_texture, NULL, (void **)&p_texture_pixels, &texture_pitch);
+    const int lock_texture_successful = SDL_LockTexture(
+      p_window_texture,
+      NULL,
+      (void **)&p_texture_pixels,
+      &texture_pitch
+    );
+
     if (lock_texture_successful != 0)
     {
       fprintf(stderr, "\nSDL2 texture could not be locked - %s", SDL_GetError());
@@ -198,7 +207,6 @@ int main(int argc, char * argv[])
         Texture locked - Now copy the client-side pixel data into the texture in one go
     */
     uint32_t * const p_texture_pixels_rgba = (uint32_t *)p_texture_pixels;
-    const int padded_texels_per_row = texture_pitch / sizeof(uint32_t);
     for (int texel_y = 0; texel_y < WINDOW_HEIGHT_VIRTUAL; texel_y++)
     {
       for (int texel_x = 0; texel_x < WINDOW_WIDTH_VIRTUAL; texel_x++)
@@ -207,7 +215,7 @@ int main(int argc, char * argv[])
             At this point, assume that the client-side texture has the same dimensions as the SDL2 texture
             to avoid extra work per pixel
         */
-        const int texture_texel_index = (padded_texels_per_row * texel_y) + texel_x;
+        const int texture_texel_index = (texture_pitch / sizeof(uint32_t) * texel_y) + texel_x;
         const int client_texel_index = (WINDOW_WIDTH_VIRTUAL * texel_y) + texel_x;
 
         /* Convert the client pixel color based on the texture pixel format */
@@ -229,10 +237,8 @@ int main(int argc, char * argv[])
 
     /*
         Clear the entire (hidden) renderer window pixel data to a single color.
-        This step is unnecessary since the SDL2 texture is to be drawn into the
-        renderer window surface and any uncovered region after stretching is
-        blacked out for fixed aspect ratio rendering that was enabled with
-        SDL_RenderSetLogicalSize
+        This seems unnecessary if every pixel is overwritten every frame but the SDL2
+        documentation urges to clear the renderer before every drawing cycle anyway
     */
     const int render_clear_successful = SDL_RenderClear(p_renderer);
     if (render_clear_successful != 0)
