@@ -2,6 +2,9 @@
 #include <stdint.h>
 #include <SDL.h>
 
+/* Defines */
+#define MAX_FPS_TITLE_LENGTH (128)
+
 /* Constants */
 const int OS_FAILURE_RETURN_CODE = -1;
 const char WINDOW_TITLE[] = "SDL2 rendering pixels without graphics API";
@@ -56,7 +59,7 @@ int main(int argc, char * argv[])
   }
 
   /* SDL2 window created successfully - Now create the renderer */
-  p_renderer = SDL_CreateRenderer(p_window, -1, SDL_RENDERER_PRESENTVSYNC);
+  p_renderer = SDL_CreateRenderer(p_window, -1, SDL_RENDERER_ACCELERATED);
   if (p_renderer == NULL)
   {
     fprintf(stderr, "\nSDL2 renderer could not be created - Error: %s", SDL_GetError());
@@ -120,10 +123,30 @@ int main(int argc, char * argv[])
     cleanup(OS_FAILURE_RETURN_CODE);
   }
 
+  /* Timing related */
+  uint64_t timer_started_in_millis = SDL_GetTicks64();
+  const unsigned int millis_per_second = 1000;
+  unsigned int frames_per_second = 0;
+  char fps_window_title[MAX_FPS_TITLE_LENGTH];
+
   /* All rendering preparations setup successfully - Now start the window loop */
   int window_close_requested = 0;
   while (!window_close_requested)
   {
+    /* Simple FPS counter */
+    const uint64_t timer_millis_elapsed = SDL_GetTicks64() - timer_started_in_millis;
+    if (timer_millis_elapsed >= millis_per_second)
+    {
+      /* Show the FPS count through the window title */
+      snprintf(fps_window_title, MAX_FPS_TITLE_LENGTH, "%s - FPS: %u", WINDOW_TITLE, frames_per_second);
+      SDL_SetWindowTitle(p_window, fps_window_title);
+
+      /* Reset the time and statistics */
+      timer_started_in_millis = SDL_GetTicks64();
+      frames_per_second = 0x00;
+    }
+    frames_per_second++;
+
     /* Process SDL2 window events */
     SDL_Event window_event;
     while (SDL_PollEvent(&window_event) != 0)
