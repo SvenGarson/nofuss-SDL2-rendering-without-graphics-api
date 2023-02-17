@@ -11,7 +11,7 @@ const char WINDOW_TITLE[] = "SDL2 rendering pixels without graphics API";
 const int WINDOW_WIDTH = 800;
 const int WINDOW_HEIGHT = 600;
 const int WINDOW_WIDTH_VIRTUAL = 160;
-const int WINDOW_HEIGHT_VIRTUAL = 144;
+const int WINDOW_HEIGHT_VIRTUAL = 50;
 const int WINDOW_PIXELS_TOTAL_VIRTUAL = WINDOW_WIDTH_VIRTUAL * WINDOW_HEIGHT_VIRTUAL;
 
 /* Datatypes */
@@ -74,6 +74,7 @@ int main(int argc, char * argv[])
     WINDOW_WIDTH_VIRTUAL,
     WINDOW_HEIGHT_VIRTUAL
   );
+
   if (p_window_texture == NULL)
   {
     fprintf(stderr, "\nSDL2 texture could not be created - Error: %s", SDL_GetError());
@@ -81,10 +82,8 @@ int main(int argc, char * argv[])
   }
 
   /* SDL2 window texture created successfully - Now extract the created texture attributes for robust, per-pixel texture manipulation */
-  /* The texture format; width and height */
   uint32_t window_texture_format;
-  int window_texture_width, window_texture_height;
-  const int query_texture_successful = SDL_QueryTexture(p_window_texture, &window_texture_format, NULL, &window_texture_width, &window_texture_height);
+  const int query_texture_successful = SDL_QueryTexture(p_window_texture, &window_texture_format, NULL, NULL, NULL);
   if (query_texture_successful != 0)
   {
     fprintf(stderr, "\nSDL2 texture attributes could not be queried - Error: %s", SDL_GetError());
@@ -133,20 +132,6 @@ int main(int argc, char * argv[])
   int window_close_requested = 0;
   while (!window_close_requested)
   {
-    /* Simple FPS counter */
-    const uint64_t timer_millis_elapsed = SDL_GetTicks64() - timer_started_in_millis;
-    if (timer_millis_elapsed >= millis_per_second)
-    {
-      /* Show the FPS count through the window title */
-      snprintf(fps_window_title, MAX_FPS_TITLE_LENGTH, "%s - FPS: %u", WINDOW_TITLE, frames_per_second);
-      SDL_SetWindowTitle(p_window, fps_window_title);
-
-      /* Reset the time and statistics */
-      timer_started_in_millis = SDL_GetTicks64();
-      frames_per_second = 0x00;
-    }
-    frames_per_second++;
-
     /* Process SDL2 window events */
     SDL_Event window_event;
     while (SDL_PollEvent(&window_event) != 0)
@@ -165,6 +150,20 @@ int main(int argc, char * argv[])
           break;
       }
     }
+
+    /* Simple FPS counter */
+    const uint64_t timer_millis_elapsed = SDL_GetTicks64() - timer_started_in_millis;
+    if (timer_millis_elapsed >= millis_per_second)
+    {
+      /* Show the FPS count through the window title */
+      snprintf(fps_window_title, MAX_FPS_TITLE_LENGTH, "%s - FPS: %u", WINDOW_TITLE, frames_per_second);
+      SDL_SetWindowTitle(p_window, fps_window_title);
+
+      /* Reset the time and statistics */
+      timer_started_in_millis = SDL_GetTicks64();
+      frames_per_second = 0x00;
+    }
+    frames_per_second++;
 
     /* All SDL2 window events processed - Now render into the client-side pixel buffer */
     for (int texel_y = 0; texel_y < WINDOW_HEIGHT_VIRTUAL; texel_y++)
