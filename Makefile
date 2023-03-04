@@ -11,10 +11,10 @@ COMPILER_FLAGS = -Wextra -Wall
 OBJ_NAME = builds/driver
 
 # Specify SDL2 library headers directory
-INCLUDE_PATHS = -IC:/sdl2_mingw_dev_libs/SDL2/include/SDL2
+INCLUDE_PATHS = -IC:/Dev/SDL2/include/SDL2
 
 # Specify SDL2 library directory
-LIBRARY_PATHS = -LC:/sdl2_mingw_dev_libs/SDL2/lib
+LIBRARY_PATHS = -LC:/Dev/SDL2/lib
 
 # Specify required libraries to resolve
 LINKER_FLAGS = -lmingw32 -lSDL2main -lSDL2
